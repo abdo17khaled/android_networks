@@ -54,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
     WifiP2pDevice currentDevice;
     List<WifiP2pDevice> peers = new ArrayList<WifiP2pDevice>();
     List<String> read_msg_box = new ArrayList<String>();
-
+    String currentDeviceName="";
     String[] deviceNameArray = {"oppoabdo"};
 
     static final int MESSAGE_READ = 1;
@@ -70,7 +70,8 @@ public class MainActivity extends AppCompatActivity {
         initialWork();
         exqListener();
     }
-
+    // receiving messages: gets called from SendReceive
+    //
     Handler handler = new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
@@ -78,10 +79,21 @@ public class MainActivity extends AppCompatActivity {
                 case MESSAGE_READ:
                     byte[] readBuff = (byte[]) msg.obj;
                     String tempMsg = new String(readBuff, 0, msg.arg1);
+                    //clears arraylist of messages after 10 messages
                     if (read_msg_box.size() > 10) {
                         read_msg_box.clear();
                     }
+                    // TO-DO
+                    /*
+                    1. decode message to see if we need to send it to another device or not
+                    note: symbol to split on will be namedevice$&%*Message
+                    2. if namedevice not the same as current device, search for device  in device list
+                    3. if device found, send to device
+                    4. if device not found, do nothing
+                     */
+                    // arraylist of messages
                     read_msg_box.add(tempMsg);
+                    // fills new messages into listview readMsg
                     fillMessages();
                     break;
             }
@@ -120,7 +132,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
                     }
-                    connectToCurrentDevice();
+                    //connectToCurrentDevice();
                 }
                 else {
                     currentDevice = null;
@@ -134,6 +146,12 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 String msg = writeMsg.getText().toString();
                 if (deviceDiscovered && selectedItem && msg != "" && msg != null && currentDevice!=null) {
+                    // TO-DO
+                    /*
+                    1. connect to device with connectToCurrentDevice() and wait 1 second
+                    2. add current device name to the beginning of the message and put a splitter token namedevice$&%*Message
+                    3. disconnect from device using code found in TO-DO
+                     */
                         sendReceive.write(msg.getBytes());
                 } else if (!deviceDiscovered) {
                     Toast.makeText(getApplicationContext(), "no devices around you", Toast.LENGTH_SHORT).show();
@@ -171,6 +189,19 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+    //TO-DO
+    /*
+    1. create fuction to disconnect device
+            mManager.removeGroup(mChannel, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+            }
+            @Override
+            public void onFailure(int reason) {
+            }
+        });
+    2. stop socket in send receive then set sendReceive to null
+     */
     private void initialWork() {
         deviceDiscovered = false;
         selectedItem = false;
@@ -259,15 +290,11 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             try {
-                System.out.println("accessed");
                 serverSocket = new ServerSocket(); // <-- create an unbound socket first
                 serverSocket.setReuseAddress(true);
                 serverSocket.bind(new InetSocketAddress(8888)); // <-- now bind it
-                System.out.println("accessed1");
                 socket = serverSocket.accept();
-                System.out.println("accessed2");
                 sendReceive = new SendReceive(socket);
-                System.out.println("sendReceiveserver");
                 System.out.println(sendReceive);
                 sendReceive.start();
             } catch (IOException e) {
