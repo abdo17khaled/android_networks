@@ -55,11 +55,11 @@ public class MainActivity extends AppCompatActivity {
     WifiP2pDevice currentSelectedDevice;
     List<WifiP2pDevice> peers = new ArrayList<WifiP2pDevice>();
     List<String> read_msg_box = new ArrayList<String>();
-    String myDeviceName="";
-    String[] deviceNameArray = {"oppoabdo"};
+//    String myDeviceName="[Phone] galaxya70";
+    String myDeviceName="oppoabdo";
+    String[] deviceNameArray = {"oppoabdo","[Phone] galaxya70"};
     String selectedDeviceName = "";
     static final int MESSAGE_READ = 1;
-
     ServerClass serverClass;
     ClientClass clientClass;
     SendReceive sendReceive;
@@ -92,38 +92,38 @@ public class MainActivity extends AppCompatActivity {
                     3. if device found, send to device
                     4. if device not found, do nothing
                      */
-                    String [] tmp = tempMsg.split("$&%*");
-                    String tmpSelectedDeviceName = tmp[0];
-                    if (tmpSelectedDeviceName.equals(myDeviceName))
-                    {
-                        // arraylist of messages
-                        read_msg_box.add(tempMsg);
-                        // fills new messages into listview readMsg
-                        fillMessages();
-                    }
-                    else
-                    {
-                        for( int i = 0; i < peers.size(); i++)
-                        {
-                            if(peers.get(i).deviceName.equals(tmpSelectedDeviceName))
-                            {
-                                currentSelectedDevice = peers.get(i);
-                                connectToCurrentDevice();
-                                try {
-                                    TimeUnit.SECONDS.sleep(1);
-                                } catch (InterruptedException e) {
-                                    System.err.format("IOException: %s%n", e);
+                    if(tempMsg != null || tempMsg != "") {
+                        String[] tmp = tempMsg.trim().split("\\$&%");
+                        String tmpSelectedDeviceName = tmp[1];
+
+                        if (tmpSelectedDeviceName.equals(myDeviceName)) {
+                            // arraylist of messages
+                            read_msg_box.add(tmp[0]+": "+tmp[2]);
+                            // fills new messages into listview readMsg
+                            fillMessages();
+                            DisconnectSocket();
+                        } else {
+                            for (int i = 0; i < peers.size(); i++) {
+                                if (peers.get(i).deviceName.equals(tmpSelectedDeviceName)) {
+                                    currentSelectedDevice = peers.get(i);
+                                    connectToCurrentDevice();
+                                    sendReceive.write(readBuff);
+                                    try {
+                                        TimeUnit.SECONDS.sleep(1);
+                                    } catch (InterruptedException e) {
+                                        System.err.format("IOException: %s%n", e);
+                                    }
+
+
+                                    Disconnect();
+
+                                    return true;
                                 }
-                                sendReceive.write(readBuff);
-
-                                Disconnect();
-
-                                return true;
                             }
                         }
                     }
 
-                    break;
+                    return true;
             }
             return true;
         }
@@ -145,14 +145,13 @@ public class MainActivity extends AppCompatActivity {
                                     currentSelectedDevice = peers.get(j);
                                 }
                             }
-
                         }
-                        else {
-                            currentSelectedDevice = null;
-                            selectedDeviceName = "";
-                            listView.setItemChecked(i,false);
-                            selectedItem = false;
-                        }
+//                        else {
+////                            currentSelectedDevice = null;
+////                            selectedDeviceName = "";
+////                            listView.setItemChecked(i,false);
+////                            selectedItem = false;
+//                        }
                     }
                     else {
                         currentSelectedDevice = peers.get(0);
@@ -162,12 +161,11 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
                     }
-                    //connectToCurrentDevice();
+                    connectToCurrentDevice();
                 }
                 else {
                     currentSelectedDevice = null;
                 }
-
             }
         });
 
@@ -175,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 String msg = writeMsg.getText().toString();
-                msg =  selectedDeviceName + "$&%*" + msg;
+                msg =  myDeviceName + "$&%" + selectedDeviceName + "$&%" + msg;
                 if (deviceDiscovered && selectedItem && msg != "" && msg != null && currentSelectedDevice!=null) {
                     // TO-DO
                     /*
@@ -183,13 +181,13 @@ public class MainActivity extends AppCompatActivity {
                     2. add current device name to the beginning of the message and put a splitter token namedevice$&%*Message   Done
                     3. disconnect from device using code found in TO-DO
                      */
-                    connectToCurrentDevice();
+
+                    sendReceive.write(msg.getBytes());
                     try {
                         TimeUnit.SECONDS.sleep(1);
                     } catch (InterruptedException e) {
                         System.err.format("IOException: %s%n", e);
                     }
-                        sendReceive.write(msg.getBytes());
                     Disconnect();
                 } else if (!deviceDiscovered) {
                     Toast.makeText(getApplicationContext(), "no devices around you", Toast.LENGTH_SHORT).show();
@@ -242,7 +240,16 @@ public class MainActivity extends AppCompatActivity {
         });
     2. stop socket in send receive then set sendReceive to null
      */
-
+    private void DisconnectSocket(){
+        try {
+            sendReceive.socket = null;
+            sendReceive = null;
+        }
+        catch (Exception err)
+        {
+            err.printStackTrace();
+        }
+    }
     private void Disconnect()
     {
         mManager.removeGroup(mChannel, new WifiP2pManager.ActionListener() {
@@ -250,21 +257,23 @@ public class MainActivity extends AppCompatActivity {
             public void onSuccess() {
                 System.out.println("Success");
                 try {
-                    sendReceive.socket.close();
+                    sendReceive.socket = null;
+                    sendReceive = null;
                 }
-                catch (IOException err)
+                catch (Exception err)
                 {
-                    System.out.println(err);
+                    err.printStackTrace();
                 }
-                sendReceive = null;
-                currentSelectedDevice = null;
-                selectedDeviceName = "";
+
+//                currentSelectedDevice = null;
+//                selectedDeviceName = "";
             }
             @Override
             public void onFailure(int reason) {
                 System.out.println("Failed" + reason);
             }
         });
+        mManager.requestPeers(mChannel, listpeer);
     }
 
     private void initialWork() {
@@ -291,6 +300,7 @@ public class MainActivity extends AppCompatActivity {
         discoverDevices();
     }
     private void fillList(){
+
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1, deviceNameArray);
         listView.setAdapter(adapter);
     }
@@ -322,7 +332,6 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
             final InetAddress groupOwnerAddress = wifiP2pInfo.groupOwnerAddress;
-
             if (wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner) {
                 System.out.println("group formed server");
                 serverClass = new ServerClass();
