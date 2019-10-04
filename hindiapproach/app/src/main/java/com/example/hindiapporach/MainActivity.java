@@ -3,6 +3,7 @@ package com.example.hindiapporach;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
+import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
@@ -20,6 +21,7 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.os.Build;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -34,10 +36,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
-    Button btnOnOff, btnDiscover, btnSend;
+    boolean deviceDiscovered;
+    boolean selectedItem;
+    int selectedInt;
+    Button btnSend;
     ListView listView;
-    TextView read_msg_box, connectionStatus;
+    ListView readMsg;
     EditText writeMsg;
 
     WifiManager wifiManager;
@@ -47,11 +51,13 @@ public class MainActivity extends AppCompatActivity {
     BroadcastReceiver mReceiver;
     IntentFilter mIntentFilter;
 
-    List<WifiP2pDevice> peers=new ArrayList<WifiP2pDevice>();
-    String[] deviceNameArray;
-    WifiP2pDevice[] deviceArray;
+    WifiP2pDevice currentDevice;
+    List<WifiP2pDevice> peers = new ArrayList<WifiP2pDevice>();
+    List<String> read_msg_box = new ArrayList<String>();
 
-    static final int MESSAGE_READ=1;
+    String[] deviceNameArray = {"oppoabdo"};
+
+    static final int MESSAGE_READ = 1;
 
     ServerClass serverClass;
     ClientClass clientClass;
@@ -65,15 +71,18 @@ public class MainActivity extends AppCompatActivity {
         exqListener();
     }
 
-    Handler handler=new Handler(new Handler.Callback() {
+    Handler handler = new Handler(new Handler.Callback() {
         @Override
         public boolean handleMessage(Message msg) {
-            switch (msg.what)
-            {
+            switch (msg.what) {
                 case MESSAGE_READ:
-                    byte[] readBuff= (byte[]) msg.obj;
-                    String tempMsg=new String(readBuff,0,msg.arg1);
-                    read_msg_box.setText(tempMsg);
+                    byte[] readBuff = (byte[]) msg.obj;
+                    String tempMsg = new String(readBuff, 0, msg.arg1);
+                    if (read_msg_box.size() > 10) {
+                        read_msg_box.clear();
+                    }
+                    read_msg_box.add(tempMsg);
+                    fillMessages();
                     break;
             }
             return true;
@@ -81,144 +90,160 @@ public class MainActivity extends AppCompatActivity {
     });
 
     private void exqListener() {
-        btnOnOff.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if(wifiManager.isWifiEnabled())
-                {
-                    wifiManager.setWifiEnabled(false);
-                    btnOnOff.setText("ON");
-                }else {
-                    wifiManager.setWifiEnabled(true);
-                    btnOnOff.setText("OFF");
-                }
-            }
-        });
-
-        btnDiscover.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                mManager.discoverPeers(mChannel, new WifiP2pManager.ActionListener() {
-                    @Override
-                    public void onSuccess() {
-                        connectionStatus.setText("Discovery Started");
-                    }
-
-                    @Override
-                    public void onFailure(int i) {
-                        connectionStatus.setText("Discovery Starting Failed");
-                    }
-                });
-            }
-        });
-
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                final WifiP2pDevice device=deviceArray[i];
-                WifiP2pConfig config=new WifiP2pConfig();
-                config.deviceAddress=device.deviceAddress;
+                System.out.println("peersSize:::"+peers.size());
+                if(!peers.isEmpty() && peers.size()>=1) {
+                    selectedItem = true;
+                    if (currentDevice != null) {
+                        if (!currentDevice.deviceName.equals(peers.get(i).deviceName)) {
+                            currentDevice = peers.get(0);
+                            for (int j = 0; j < peers.size(); j++) {
+                                if (deviceNameArray[i].equals(peers.get(j).deviceName)) {
+                                    currentDevice = peers.get(j);
+                                }
+                            }
 
-                mManager.connect(mChannel, config, new WifiP2pManager.ActionListener() {
-                    @Override
-                    public void onSuccess() {
-                        Toast.makeText(getApplicationContext(),"Connected to "+device.deviceName,Toast.LENGTH_SHORT).show();
+                        }
+                        else {
+                            currentDevice = null;
+                            listView.setItemChecked(i,false);
+                            selectedItem = false;
+                        }
                     }
+                    else {
+                        currentDevice = peers.get(0);
+                        for (int j = 0; j < peers.size(); j++) {
+                            if (deviceNameArray[i].equals(peers.get(j).deviceName)) {
+                                currentDevice = peers.get(j);
+                            }
+                        }
+                    }
+                    connectToCurrentDevice();
+                }
+                else {
+                    currentDevice = null;
+                }
 
-                    @Override
-                    public void onFailure(int i) {
-                        Toast.makeText(getApplicationContext(),"Not Connected",Toast.LENGTH_SHORT).show();
-                    }
-                });
             }
         });
 
         btnSend.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                String msg=writeMsg.getText().toString();
-                sendReceive.write(msg.getBytes());
+                String msg = writeMsg.getText().toString();
+                if (deviceDiscovered && selectedItem && msg != "" && msg != null && currentDevice!=null) {
+                        sendReceive.write(msg.getBytes());
+                } else if (!deviceDiscovered) {
+                    Toast.makeText(getApplicationContext(), "no devices around you", Toast.LENGTH_SHORT).show();
+                } else if (!selectedItem) {
+                    Toast.makeText(getApplicationContext(), "no devices selected", Toast.LENGTH_SHORT).show();
+                }
             }
         });
     }
+    private void discoverDevices(){
+        mManager.discoverPeers(mChannel, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+                Toast.makeText(getApplicationContext(),"Discovery Started",Toast.LENGTH_SHORT).show();
+            }
+            @Override
+            public void onFailure(int i) {
+                Toast.makeText(getApplicationContext(),"Discovery Starting Failed",Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    private void connectToCurrentDevice(){
 
+        WifiP2pConfig config=new WifiP2pConfig();
+        config.deviceAddress=currentDevice.deviceAddress;
+        mManager.connect(mChannel, config, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+                Toast.makeText(getApplicationContext(),"Connected to "+currentDevice.deviceName,Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onFailure(int i) {
+                Toast.makeText(getApplicationContext(),"Not Connected",Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
     private void initialWork() {
-        btnOnOff=(Button) findViewById(R.id.onOff);
-        btnDiscover=(Button) findViewById(R.id.discover);
-        btnSend=(Button) findViewById(R.id.sendButton);
-        listView=(ListView) findViewById(R.id.peerListView);
-        read_msg_box=(TextView) findViewById(R.id.readMsg);
-        connectionStatus=(TextView) findViewById(R.id.connectionStatus);
-        writeMsg=(EditText) findViewById(R.id.writeMsg);
+        deviceDiscovered = false;
+        selectedItem = false;
+        selectedInt = -1;
+        btnSend = (Button) findViewById(R.id.sendButton);
+        listView = (ListView) findViewById(R.id.peerListView);
+        readMsg = (ListView) findViewById(R.id.readMsg);
+        writeMsg = (EditText) findViewById(R.id.writeMsg);
+        fillList();
+        wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
-        wifiManager= (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+        mManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
+        mChannel = mManager.initialize(this, getMainLooper(), null);
 
-        mManager= (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
-        mChannel=mManager.initialize(this,getMainLooper(),null);
+        mReceiver = new WiFiDirectBroadcastReceiver(mManager, mChannel, this);
 
-        mReceiver=new WiFiDirectBroadcastReceiver(mManager, mChannel,this);
-
-        mIntentFilter=new IntentFilter();
+        mIntentFilter = new IntentFilter();
         mIntentFilter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
         mIntentFilter.addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION);
         mIntentFilter.addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION);
         mIntentFilter.addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION);
+        discoverDevices();
     }
-
-    WifiP2pManager.PeerListListener peerListListener=new WifiP2pManager.PeerListListener() {
+    private void fillList(){
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1, deviceNameArray);
+        listView.setAdapter(adapter);
+    }
+    private void fillMessages(){
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_list_item_1, read_msg_box);
+        readMsg.setAdapter(adapter);
+    }
+    WifiP2pManager.PeerListListener listpeer = new WifiP2pManager.PeerListListener() {
         @Override
         public void onPeersAvailable(WifiP2pDeviceList peerList) {
-            if(!peerList.getDeviceList().equals(peers))
-            {
+            System.out.println("WIFIDIRECT:::");
+            if (!peerList.getDeviceList().equals(peers)) {
                 peers.clear();
                 peers.addAll(peerList.getDeviceList());
-
-                deviceNameArray=new String[peerList.getDeviceList().size()];
-                deviceArray=new WifiP2pDevice[peerList.getDeviceList().size()];
-                int index=0;
-
-                for(WifiP2pDevice device : peerList.getDeviceList())
-                {
-                    deviceNameArray[index]=device.deviceName;
-                    deviceArray[index]=device;
-                    index++;
+                for(WifiP2pDevice peer:peers)
+                    System.out.println("wifiDevices:::"+peer.deviceName);
+                if (peers.size() == 0) {
+                    deviceDiscovered = false;
+                    return;
+                } else {
+                    deviceDiscovered = true;
                 }
-
-                ArrayAdapter<String> adapter=new ArrayAdapter<String>(getApplicationContext(),android.R.layout.simple_list_item_1,deviceNameArray);
-                listView.setAdapter(adapter);
             }
 
-            if(peers.size()==0)
-            {
-                Toast.makeText(getApplicationContext(),"No Device Found",Toast.LENGTH_SHORT).show();
-                return;
-            }
         }
     };
 
-    WifiP2pManager.ConnectionInfoListener connectionInfoListener=new WifiP2pManager.ConnectionInfoListener() {
+    WifiP2pManager.ConnectionInfoListener connectionInfoListener = new WifiP2pManager.ConnectionInfoListener() {
         @Override
         public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
-            final InetAddress groupOwnerAddress=wifiP2pInfo.groupOwnerAddress;
+            final InetAddress groupOwnerAddress = wifiP2pInfo.groupOwnerAddress;
 
-            if(wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner)
-            {
-                connectionStatus.setText("Host");
-                serverClass=new ServerClass();
+            if (wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner) {
+                System.out.println("group formed server");
+                serverClass = new ServerClass();
                 serverClass.start();
-            }else if(wifiP2pInfo.groupFormed)
-            {
-                connectionStatus.setText("Client");
-                clientClass=new ClientClass(groupOwnerAddress);
+            } else if (wifiP2pInfo.groupFormed) {
+                System.out.println("group formed client");
+                clientClass = new ClientClass(groupOwnerAddress);
                 clientClass.start();
             }
+            System.out.println("group not formed");
         }
     };
 
     @Override
     protected void onResume() {
         super.onResume();
-        registerReceiver(mReceiver,mIntentFilter);
+        registerReceiver(mReceiver, mIntentFilter);
     }
 
     @Override
@@ -227,16 +252,23 @@ public class MainActivity extends AppCompatActivity {
         unregisterReceiver(mReceiver);
     }
 
-    public class ServerClass extends Thread{
+    public class ServerClass extends Thread {
         Socket socket;
         ServerSocket serverSocket;
 
         @Override
         public void run() {
             try {
-                serverSocket=new ServerSocket(8888);
-                socket=serverSocket.accept();
-                sendReceive=new SendReceive(socket);
+                System.out.println("accessed");
+                serverSocket = new ServerSocket(); // <-- create an unbound socket first
+                serverSocket.setReuseAddress(true);
+                serverSocket.bind(new InetSocketAddress(8888)); // <-- now bind it
+                System.out.println("accessed1");
+                socket = serverSocket.accept();
+                System.out.println("accessed2");
+                sendReceive = new SendReceive(socket);
+                System.out.println("sendReceiveserver");
+                System.out.println(sendReceive);
                 sendReceive.start();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -244,17 +276,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private class SendReceive extends Thread{
+    private class SendReceive extends Thread {
         private Socket socket;
         private InputStream inputStream;
         private OutputStream outputStream;
 
-        public SendReceive(Socket skt)
-        {
-            socket=skt;
+        public SendReceive(Socket skt) {
+            socket = skt;
             try {
-                inputStream=socket.getInputStream();
-                outputStream=socket.getOutputStream();
+                inputStream = socket.getInputStream();
+                outputStream = socket.getOutputStream();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -262,16 +293,14 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void run() {
-            byte[] buffer=new byte[1024];
+            byte[] buffer = new byte[1024];
             int bytes;
 
-            while (socket!=null)
-            {
+            while (socket != null) {
                 try {
-                    bytes=inputStream.read(buffer);
-                    if(bytes>0)
-                    {
-                        handler.obtainMessage(MESSAGE_READ,bytes,-1,buffer).sendToTarget();
+                    bytes = inputStream.read(buffer);
+                    if (bytes > 0) {
+                        handler.obtainMessage(MESSAGE_READ, bytes, -1, buffer).sendToTarget();
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -279,31 +308,37 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        public void write(byte[] bytes)
-        {
-            try {
-                outputStream.write(bytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        public void write(final byte[] bytes) {
+            new Thread(new Runnable() {
+
+                @Override
+                public void run() {
+                    System.out.println("batee5 bytes");
+                    System.out.println(bytes);
+                    try {
+                        outputStream.write(bytes);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
         }
     }
 
-    public class ClientClass extends Thread{
+    public class ClientClass extends Thread {
         Socket socket;
         String hostAdd;
 
-        public  ClientClass(InetAddress hostAddress)
-        {
-            hostAdd=hostAddress.getHostAddress();
-            socket=new Socket();
+        public ClientClass(InetAddress hostAddress) {
+            hostAdd = hostAddress.getHostAddress();
+            socket = new Socket();
         }
 
         @Override
         public void run() {
             try {
-                socket.connect(new InetSocketAddress(hostAdd,8888),500);
-                sendReceive=new SendReceive(socket);
+                socket.connect(new InetSocketAddress(hostAdd, 8888), 500);
+                sendReceive = new SendReceive(socket);
                 sendReceive.start();
             } catch (IOException e) {
                 e.printStackTrace();

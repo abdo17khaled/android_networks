@@ -37,11 +37,18 @@ public class WiFiDirectBroadcastReceiver extends BroadcastReceiver {
             }else {
                 Toast.makeText(context,"Wifi is OFF",Toast.LENGTH_SHORT).show();
             }
+            if(mManager!=null)
+            {
+                mManager.requestPeers(mChannel,mActivity.listpeer);
+            }
+            else{
+                Toast.makeText(context,"Wifi is OFF",Toast.LENGTH_SHORT).show();
+            }
         }else if(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION.equals(action)){
             //do something
             if(mManager!=null)
             {
-                mManager.requestPeers(mChannel,mActivity.peerListListener);
+                mManager.requestPeers(mChannel,mActivity.listpeer);
             }
         }else if(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION.equals(action)){
             //do something
@@ -56,7 +63,6 @@ public class WiFiDirectBroadcastReceiver extends BroadcastReceiver {
             {
                 mManager.requestConnectionInfo(mChannel,mActivity.connectionInfoListener);
             }else {
-                mActivity.connectionStatus.setText("Device Disconnected");
             }
         }else if(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION.equals(action)){
             //do something
