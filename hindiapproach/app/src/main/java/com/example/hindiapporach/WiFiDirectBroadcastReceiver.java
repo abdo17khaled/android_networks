@@ -36,6 +36,9 @@ public class WiFiDirectBroadcastReceiver extends BroadcastReceiver {
             }else {
                 Toast.makeText(context,"Wifi is OFF",Toast.LENGTH_SHORT).show();
             }
+            if(state==WifiP2pDevice.UNAVAILABLE){
+                System.out.println("absolute disconnectivity");
+            }
             if(mManager!=null)
             {
                 mManager.requestPeers(mChannel,mActivity.listpeer);

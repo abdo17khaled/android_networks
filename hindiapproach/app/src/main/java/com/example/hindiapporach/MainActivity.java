@@ -38,7 +38,6 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     boolean deviceDiscovered;
-    boolean selectedItem;
     int selectedInt;
     Button btnSend;
     ListView listView;
@@ -55,11 +54,13 @@ public class MainActivity extends AppCompatActivity {
     WifiP2pDevice currentSelectedDevice;
     List<WifiP2pDevice> peers = new ArrayList<WifiP2pDevice>();
     List<String> read_msg_box = new ArrayList<String>();
-//    String myDeviceName="[Phone] galaxya70";
-    String myDeviceName="oppoabdo";
+    String myDeviceName="[Phone] galaxya70";
+//    String myDeviceName="oppoabdo";
     String[] deviceNameArray = {"oppoabdo","[Phone] galaxya70"};
     String selectedDeviceName = "";
     static final int MESSAGE_READ = 1;
+    boolean connectionStatus = false;
+    boolean relayPoint = false;
     ServerClass serverClass;
     ClientClass clientClass;
     SendReceive sendReceive;
@@ -80,10 +81,12 @@ public class MainActivity extends AppCompatActivity {
                 case MESSAGE_READ:
                     byte[] readBuff = (byte[]) msg.obj;
                     String tempMsg = new String(readBuff, 0, msg.arg1);
+                    System.out.println(tempMsg+":::messageRecievedbatee5");
                     //clears arraylist of messages after 10 messages
                     if (read_msg_box.size() > 10) {
                         read_msg_box.clear();
                     }
+                    System.out.println(tempMsg);
                     // TO-DO
                     /*
                     1. decode message to see if we need to send it to another device or not
@@ -98,28 +101,24 @@ public class MainActivity extends AppCompatActivity {
 
                         if (tmpSelectedDeviceName.equals(myDeviceName)) {
                             // arraylist of messages
+                            System.out.println(tempMsg+":::batee5a 2");
                             read_msg_box.add(tmp[0]+": "+tmp[2]);
                             // fills new messages into listview readMsg
                             fillMessages();
-                            DisconnectSocket();
+                            return true;
                         } else {
+                            Disconnect();
+                            currentSelectedDevice = peers.get(0);
                             for (int i = 0; i < peers.size(); i++) {
                                 if (peers.get(i).deviceName.equals(tmpSelectedDeviceName)) {
                                     currentSelectedDevice = peers.get(i);
-                                    connectToCurrentDevice();
-                                    sendReceive.write(readBuff);
-                                    try {
-                                        TimeUnit.SECONDS.sleep(1);
-                                    } catch (InterruptedException e) {
-                                        System.err.format("IOException: %s%n", e);
-                                    }
-
-
-                                    Disconnect();
-
-                                    return true;
                                 }
                             }
+
+                            connectToCurrentDevice();
+                            sendReceive.write(readBuff);
+                            Disconnect();
+                            return true;
                         }
                     }
 
@@ -135,22 +134,25 @@ public class MainActivity extends AppCompatActivity {
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
                 System.out.println("peersSize:::"+peers.size());
                 if(!peers.isEmpty() && peers.size()>=1) {
-                    selectedItem = true;
+                    deviceDiscovered = true;
                     selectedDeviceName = deviceNameArray[i];
                     if (currentSelectedDevice != null) {
-                        if (!currentSelectedDevice.deviceName.equals(peers.get(i).deviceName)) {
+                        if (!currentSelectedDevice.deviceName.equals(deviceNameArray[i])) {
                             currentSelectedDevice = peers.get(0);
                             for (int j = 0; j < peers.size(); j++) {
                                 if (deviceNameArray[i].equals(peers.get(j).deviceName)) {
                                     currentSelectedDevice = peers.get(j);
+                                    relayPoint = false;
+                                    break;
                                 }
+                                relayPoint = true;
                             }
+                            connectToCurrentDevice();
                         }
 //                        else {
 ////                            currentSelectedDevice = null;
 ////                            selectedDeviceName = "";
 ////                            listView.setItemChecked(i,false);
-////                            selectedItem = false;
 //                        }
                     }
                     else {
@@ -158,12 +160,16 @@ public class MainActivity extends AppCompatActivity {
                         for (int j = 0; j < peers.size(); j++) {
                             if (deviceNameArray[i].equals(peers.get(j).deviceName)) {
                                 currentSelectedDevice = peers.get(j);
+                                relayPoint = false;
+                                break;
                             }
+                            relayPoint = true;
                         }
+                        connectToCurrentDevice();
                     }
-                    connectToCurrentDevice();
                 }
                 else {
+                    deviceDiscovered = false;
                     currentSelectedDevice = null;
                 }
             }
@@ -174,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 String msg = writeMsg.getText().toString();
                 msg =  myDeviceName + "$&%" + selectedDeviceName + "$&%" + msg;
-                if (deviceDiscovered && selectedItem && msg != "" && msg != null && currentSelectedDevice!=null) {
+                if (deviceDiscovered && msg != "" && msg != null) {
                     // TO-DO
                     /*
                     1. connect to device with connectToCurrentDevice() and wait 1 second     Done
@@ -183,19 +189,17 @@ public class MainActivity extends AppCompatActivity {
                      */
 
                     sendReceive.write(msg.getBytes());
-                    try {
-                        TimeUnit.SECONDS.sleep(1);
-                    } catch (InterruptedException e) {
-                        System.err.format("IOException: %s%n", e);
+//                    try {
+//                        TimeUnit.SECONDS.sleep(1);
+//                    } catch (InterruptedException e) {
+//                        System.err.format("IOException: %s%n", e);
+//                    }
+                    if(relayPoint){
+                        Disconnect();
                     }
-                    Disconnect();
                 } else if (!deviceDiscovered) {
                     Toast.makeText(getApplicationContext(), "no devices around you", Toast.LENGTH_SHORT).show();
-                } else if (!selectedItem) {
-                    Toast.makeText(getApplicationContext(), "no devices selected", Toast.LENGTH_SHORT).show();
                 }
-
-
             }
         });
     }
@@ -218,6 +222,8 @@ public class MainActivity extends AppCompatActivity {
         mManager.connect(mChannel, config, new WifiP2pManager.ActionListener() {
             @Override
             public void onSuccess() {
+                connectionStatus = true;
+                System.out.println("Connected batee5 device yes yes");
                 Toast.makeText(getApplicationContext(),"Connected to "+currentSelectedDevice.deviceName,Toast.LENGTH_SHORT).show();
             }
 
@@ -226,6 +232,8 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(getApplicationContext(),"Not Connected",Toast.LENGTH_SHORT).show();
             }
         });
+        System.out.println("after series, Connected batee5 device yes yes");
+
     }
     //TO-DO
     /*
@@ -240,45 +248,15 @@ public class MainActivity extends AppCompatActivity {
         });
     2. stop socket in send receive then set sendReceive to null
      */
-    private void DisconnectSocket(){
-        try {
-            sendReceive.socket = null;
-            sendReceive = null;
-        }
-        catch (Exception err)
-        {
-            err.printStackTrace();
-        }
-    }
+
     private void Disconnect()
     {
-        mManager.removeGroup(mChannel, new WifiP2pManager.ActionListener() {
-            @Override
-            public void onSuccess() {
-                System.out.println("Success");
-                try {
-                    sendReceive.socket = null;
-                    sendReceive = null;
-                }
-                catch (Exception err)
-                {
-                    err.printStackTrace();
-                }
-
-//                currentSelectedDevice = null;
-//                selectedDeviceName = "";
-            }
-            @Override
-            public void onFailure(int reason) {
-                System.out.println("Failed" + reason);
-            }
-        });
-        mManager.requestPeers(mChannel, listpeer);
+        sendReceive.socket = null;
+        initialWork();
     }
 
     private void initialWork() {
         deviceDiscovered = false;
-        selectedItem = false;
         selectedInt = -1;
         btnSend = (Button) findViewById(R.id.sendButton);
         listView = (ListView) findViewById(R.id.peerListView);
@@ -287,7 +265,9 @@ public class MainActivity extends AppCompatActivity {
         fillList();
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
+
         mManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
+
         mChannel = mManager.initialize(this, getMainLooper(), null);
 
         mReceiver = new WiFiDirectBroadcastReceiver(mManager, mChannel, this);
@@ -332,11 +312,14 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
             final InetAddress groupOwnerAddress = wifiP2pInfo.groupOwnerAddress;
+
             if (wifiP2pInfo.groupFormed && wifiP2pInfo.isGroupOwner) {
+                connectionStatus = true;
                 System.out.println("group formed server");
                 serverClass = new ServerClass();
                 serverClass.start();
             } else if (wifiP2pInfo.groupFormed) {
+                connectionStatus = true;
                 System.out.println("group formed client");
                 clientClass = new ClientClass(groupOwnerAddress);
                 clientClass.start();
@@ -407,6 +390,7 @@ public class MainActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
             }
+            System.out.println("thread terminated");
         }
 
         public void write(final byte[] bytes) {
@@ -438,7 +422,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             try {
-                socket.connect(new InetSocketAddress(hostAdd, 8888), 500);
+                socket.connect(new InetSocketAddress(hostAdd, 8888));
                 sendReceive = new SendReceive(socket);
                 sendReceive.start();
             } catch (IOException e) {
